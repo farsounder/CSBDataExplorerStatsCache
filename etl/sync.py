@@ -203,11 +203,9 @@ def run_sync() -> date | None:
         for d, uris in _date_batches():
             _run_partition(con, d, uris)
             batch_count += 1
-            if max_date is None or d > max_date:
-                max_date = d
-        if max_date is not None:
-            log.info("Updating state: last_sync_date=%s", max_date.isoformat())
-            set_last_sync_date(max_date)
+            max_date = d
+            # Persist state after each partition so a failed run doesn't lose progress
+            set_last_sync_date(d)
         log.info("Processed %d partition(s)", batch_count)
         return max_date
     finally:

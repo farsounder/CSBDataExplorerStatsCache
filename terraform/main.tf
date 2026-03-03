@@ -138,12 +138,12 @@ resource "google_cloud_run_v2_job" "etl" {
         }
         resources {
           limits = {
-            cpu    = "1"
-            memory = "2Gi"
+            cpu    = "2"
+            memory = "8Gi"
           }
         }
       }
-      timeout               = "3600s"
+      timeout               = "7200s"
     }
   }
   depends_on = [google_project_service.run, google_storage_bucket_iam_member.run_data]
