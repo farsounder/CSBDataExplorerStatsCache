@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import date
 
 from src.config import get_settings
+
+log = logging.getLogger(__name__)
 
 
 STATE_KEY = "_state/last_sync.json"
@@ -38,7 +41,8 @@ def get_last_sync_date() -> date | None:
     try:
         data = json.loads(blob.download_as_string().decode("utf-8"))
         return date.fromisoformat(data["last_sync_date"])
-    except Exception:
+    except Exception as e:
+        log.info("No state file or failed to read (will start from beginning): %s", e)
         return None
 
 
@@ -56,3 +60,4 @@ def set_last_sync_date(d: date) -> None:
     client = storage.Client()
     blob = client.bucket(settings.GCS_BUCKET).blob(f"{settings.GCS_PREFIX}/{STATE_KEY}")
     blob.upload_from_string(payload, content_type="application/json")
+    log.info("Wrote state to gs://%s/%s/%s", settings.GCS_BUCKET, settings.GCS_PREFIX, STATE_KEY)

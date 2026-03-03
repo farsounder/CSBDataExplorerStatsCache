@@ -46,7 +46,7 @@ resource "google_service_account" "run" {
   display_name = "NOAA CSB Analytics Cloud Run"
 }
 
-# Allow the Run SA to read/write the data bucket
+# Allow the Run SA to read/write the data bucket (API and ETL)
 resource "google_storage_bucket_iam_member" "run_data" {
   bucket = google_storage_bucket.data.name
   role   = "roles/storage.objectAdmin"
@@ -85,7 +85,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
       startup_probe {
         http_get {
-          path = "/"
+          path = "/health"
         }
         initial_delay_seconds = 5
         timeout_seconds        = 3
@@ -94,7 +94,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
       liveness_probe {
         http_get {
-          path = "/"
+          path = "/health"
         }
         initial_delay_seconds = 10
         period_seconds         = 10
@@ -146,7 +146,7 @@ resource "google_cloud_run_v2_job" "etl" {
       timeout               = "3600s"
     }
   }
-  depends_on = [google_project_service.run]
+  depends_on = [google_project_service.run, google_storage_bucket_iam_member.run_data]
 }
 
 # Scheduler needs a SA with permission to invoke the Cloud Run Job

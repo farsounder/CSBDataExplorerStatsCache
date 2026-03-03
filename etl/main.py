@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
+import traceback
 
 from src.config import get_settings
 
 from etl.sync import run_sync
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%SZ",
+    stream=sys.stdout,
+    force=True,
+)
+log = logging.getLogger(__name__)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -32,16 +43,24 @@ def main() -> None:
         os.environ["SYNC_MODE"] = "full"
     if args.start_date:
         os.environ["START_DATE"] = args.start_date
-    # Reload settings after env override
     get_settings.cache_clear()
+    settings = get_settings()
+    log.info(
+        "ETL starting: bucket=%s prefix=%s mode=%s start_date=%s",
+        settings.GCS_BUCKET or "(local)",
+        settings.GCS_PREFIX,
+        "full" if settings.is_full_refresh else "incremental",
+        settings.START_DATE,
+    )
     try:
         max_date = run_sync()
         if max_date is not None:
-            print(f"Sync complete. Last partition date: {max_date.isoformat()}")
+            log.info("Sync complete. Last partition date: %s", max_date.isoformat())
         else:
-            print("Sync complete. No new partitions processed.")
+            log.info("Sync complete. No new partitions processed.")
     except Exception as e:
-        print(f"Sync failed: {e}", file=sys.stderr)
+        log.exception("Sync failed: %s", e)
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 
 
