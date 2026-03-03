@@ -1,0 +1,12 @@
+# Exclude from gcloud deploy (smaller context)
+.venv
+__pycache__
+*.py[cod]
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.md
+.python-version
+*.plan.md

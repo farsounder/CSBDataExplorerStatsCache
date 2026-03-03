@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "etl*", "api*"]
+
+[project]
+name = "noaa-csb-analytics"
+version = "0.1.0"
+description = "NOAA Crowdsourced Bathymetry analytics pipeline and API"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.32,<1",
+    "duckdb>=1.1,<2",
+    "boto3>=1.35,<2",
+    "pydantic-settings>=2.6,<3",
+    "python-dotenv>=1.0,<2",
+    "google-cloud-storage>=2.18,<3",
+]
+[project.optional-dependencies]
+gcp = ["google-cloud-secret-manager>=2.21,<3", "google-cloud-storage>=2.18,<3"]

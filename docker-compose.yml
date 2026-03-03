@@ -1,0 +1,33 @@
+# Local testing: API + ETL with shared local storage (no GCP required).
+# Usage:
+#   1. docker compose up -d          # start API at http://localhost:8080
+#   2. docker compose run --rm etl python -m etl.main --start-date 2019-06-26  # one-day sync to populate data
+#   3. Open http://localhost:8080/health and http://localhost:8080/stats/global
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8080:8080"
+    environment:
+      LOCAL_STORAGE_PATH: /data
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    # optional: env_file: [.env]
+
+  # Run manually to sync data; not started by "docker compose up".
+  # Example: docker compose run --rm etl python -m etl.main --start-date 2019-06-26
+  etl:
+    build:
+      context: .
+      dockerfile: Dockerfile.etl
+    environment:
+      LOCAL_STORAGE_PATH: /data
+    volumes:
+      - ./data:/data
+    profiles:
+      - etl
+    # optional: env_file: [.env]
