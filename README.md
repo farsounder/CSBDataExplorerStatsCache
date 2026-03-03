@@ -91,5 +91,40 @@ To run ETL with more data: `docker compose run --rm etl python -m etl.main --ful
 
 ## Deployment (GCP)
 
-- **Cloud Run Job** (ETL): build from `Dockerfile.etl`; schedule with Cloud Scheduler (e.g. daily). Optional second schedule with `SYNC_MODE=full` (e.g. weekly).
-- **Cloud Run Service** (API): build from `Dockerfile.api`; set `/health` as health check.
+Infrastructure as code: use Terraform so you don’t need the console.
+
+- **[terraform/README.md](terraform/README.md)** — Create project, enable APIs, GCS bucket, Artifact Registry, Cloud Run (API + ETL job), and Cloud Scheduler from the CLI. Then build/push your images and re-apply.
+- **Cloud Run Service** (API): build from `Dockerfile.api`; health check `/health`.
+- **Cloud Run Job** (ETL): build from `Dockerfile.etl`; Scheduler runs it daily (incremental) and optionally weekly (full refresh).
+
+### Build and push images
+
+**Recommended: try locally first**, then automate with the script or GitHub Action once it works.
+
+**Local (one-time auth, then build/push):**
+
+From repo root in **PowerShell** (or cmd with `set REGION=...` and run the `docker` lines):
+
+```powershell
+.\scripts\build-push.ps1 YOUR_PROJECT_ID
+# Optional different region: .\scripts\build-push.ps1 YOUR_PROJECT_ID -Region europe-west1
+```
+
+Or run the steps manually:
+
+```powershell
+$REGION = "us-central1"
+$PROJECT = "YOUR_PROJECT_ID"
+$REPO = "noaa-csb-analytics"
+gcloud auth configure-docker ${REGION}-docker.pkg.dev
+docker build -f Dockerfile.api -t "${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/api:latest" .
+docker push "${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/api:latest"
+docker build -f Dockerfile.etl -t "${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/etl:latest" .
+docker push "${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/etl:latest"
+```
+
+The script tags images with both `:latest` and a unique tag (git SHA or timestamp) and prints the exact `terraform apply` command to run—use that so Terraform sees a new image and redeploys (re-pushing `:latest` alone doesn’t change the URL, so apply would show no changes). See [terraform/README.md](terraform/README.md).
+
+*(On macOS/Linux: `./scripts/build-push.sh YOUR_PROJECT_ID`.)*
+
+**GitHub Actions:** On push to `main`, the workflow in [.github/workflows/build-push.yml](.github/workflows/build-push.yml) can build and push both images to Artifact Registry. Add repo secrets `GCP_PROJECT_ID` and `GCP_SA_KEY` (JSON key for a SA with `roles/artifactregistry.writer`), then enable the workflow when you're ready.

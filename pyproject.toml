@@ -20,6 +20,7 @@ dependencies = [
     "pydantic-settings>=2.6,<3",
     "python-dotenv>=1.0,<2",
     "google-cloud-storage>=2.18,<3",
+    "gcsfs>=2023.6,<2026",
 ]
 [project.optional-dependencies]
 gcp = ["google-cloud-secret-manager>=2.21,<3", "google-cloud-storage>=2.18,<3"]

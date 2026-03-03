@@ -11,3 +11,9 @@ wheels/
 
 # Local test data (Docker Compose / LOCAL_STORAGE_PATH)
 data/
+
+# Terraform (keep .terraform.lock.hcl committed)
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfplan

@@ -1,4 +1,4 @@
-"""DuckDB connection factory: httpfs + GCS for ETL; GCS-only for API."""
+"""DuckDB connection factory: httpfs + GCS for ETL; GCS or fsspec/gcsfs for API."""
 
 from __future__ import annotations
 
@@ -6,6 +6,13 @@ import duckdb
 from duckdb import DuckDBPyConnection
 
 from src.config import get_settings
+
+
+def _register_gcs_fsspec(con: DuckDBPyConnection) -> None:
+    """Register GCS via gcsfs so DuckDB uses Python default credentials (e.g. Cloud Run metadata)."""
+    import fsspec
+    fs = fsspec.filesystem("gcs")  # uses default credentials (ADC / metadata server on Cloud Run)
+    con.register_filesystem(fs)
 
 
 def _configure_httpfs_s3(con: DuckDBPyConnection) -> None:
@@ -45,9 +52,16 @@ def connection_etl() -> DuckDBPyConnection:
 def connection_api() -> DuckDBPyConnection:
     """DuckDB connection for API: GCS or local read-only (Parquet)."""
     con = duckdb.connect()
-    if not get_settings().is_local_storage:
+    settings = get_settings()
+    if settings.is_local_storage:
+        return con
+    # On GCP without explicit keys, use gcsfs so DuckDB uses Python default credentials
+    # (Cloud Run metadata). Otherwise use httpfs + GCS secret.
+    if settings.GCS_KEY and settings.GCS_SECRET:
         con.execute("INSTALL httpfs; LOAD httpfs;")
         _configure_gcs(con)
+    else:
+        _register_gcs_fsspec(con)
     return con
 
 
