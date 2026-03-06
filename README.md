@@ -9,9 +9,25 @@ uv sync                    # create .venv and install deps (add --extra gcp for 
 cp .env.example .env       # set GCS_BUCKET + GCS_PREFIX (GCP) or LOCAL_STORAGE_PATH (local testing)
 ```
 
-## ETL (Compressor)
+## ETL (Rollup builder)
 
-Sync from `s3://noaa-dcdb-bathymetry-pds/csb/csv/` to Hive-partitioned Parquet on GCS.
+Reads NOAA CSVs from `s3://noaa-dcdb-bathymetry-pds/csb/csv/` using Python CSV parsing and writes monthly rollup Parquet with PyArrow.
+DuckDB is intentionally not used in ETL ingest/write.
+
+ETL output:
+
+- `rollup/year=YYYY/month=MM/data.parquet`
+- `_state/last_sync.json`
+- `_state/failed_csvs/day=YYYY-MM-DD.json` (only when files are skipped)
+
+Rollup schema:
+
+- `unique_id`
+- `platform_name`
+- `provider`
+- `day`
+- `point_count`
+- `file_count`
 
 - **Incremental** (default): only partition dates after last run.
 - **Full refresh**: re-process all dates (catches late-arriving data).
@@ -29,9 +45,18 @@ uv run python -m etl.main --start-date 2026-01-01
 
 Env: `GCS_BUCKET`, `GCS_PREFIX`; optional `SYNC_MODE=incremental|full`, `START_DATE`, `GCS_KEY`/`GCS_SECRET`.
 
+### ETL runtime behavior
+
+- **Start date precedence (incremental):** `last_sync_date` from state → `START_DATE` → earliest date discovered in NOAA bucket.
+- **Checkpointing:** state is updated **after each successful month partition write**, using the max processed source date for that year/month.
+- **Resume safety:** if a run fails mid-way, previously written months are already checkpointed and do not need to be reprocessed.
+- **Bad timestamps:** rows with unparseable `TIME` are skipped from rollup and logged.
+- **Bad files:** unreadable/problematic CSV files are skipped and logged to `_state/failed_csvs/` so the run can continue.
+- **Incremental merge semantics:** for overlapping `(unique_id, platform_name, provider, day)` keys, the new run replaces prior values for those keys (idempotent re-run behavior).
+
 ## API
 
-Serves analytics over the Parquet store on GCS.
+Serves analytics from the rollup Parquet only (`{storage_base}/rollup/**/*.parquet`) using DuckDB in the API process.
 
 ```bash
 uv run uvicorn api.main:app --reload --port 8000
@@ -46,7 +71,10 @@ Endpoints:
 | `GET /platforms` | Distinct UNIQUE_ID, PLATFORM_NAME |
 | `GET /top-platforms?days=30&limit=10` | Top platforms by point count |
 | `GET /top-providers?days=30&limit=10` | Top providers by point count |
-| `GET /stats/daily/platform/{id}` | Daily point counts for a platform |
+| `GET /stats/daily/platform/{id}?days=30` | Daily point counts for a platform (lookback window) |
+| `GET /stats/daily/provider/{provider}?days=30` | Daily point counts for a provider (lookback window) |
+| `GET /stats/daily/all/providers?days=30` | Daily point counts split by provider (stacked chart friendly) |
+| `GET /stats/daily/all/platforms?days=30` | Daily point counts split by platform (stacked chart friendly) |
 | `GET /stats/global` | Total points, files, unique platforms |
 | `GET /stats/discovery-rate` | New platforms per month |
 
@@ -83,6 +111,12 @@ curl http://localhost:8080/stats/global
 ```
 
 To run ETL with more data: `docker compose run --rm etl python -m etl.main --full-refresh` (slow) or use `--start-date` / incremental. Data is persisted in `./data`.
+
+### Recovery workflow after ETL failure
+
+1. Check ETL logs for the last successfully written year/month partition and checkpoint message.
+2. Confirm `_state/last_sync.json` advanced to that completed source date.
+3. Re-run incremental ETL; it resumes from the next date and rewrites only touched month partitions.
 
 ## Docker (single image)
 

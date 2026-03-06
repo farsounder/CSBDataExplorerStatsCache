@@ -14,5 +14,9 @@ def get_db(request: Request) -> DuckDBPyConnection:
 
 @router.get("/providers")
 def providers(db: DuckDBPyConnection = Depends(get_db)) -> dict:
+    """List all distinct data providers currently present in analytics rollups.
+
+    Returns provider names in ascending order for populating filters and dashboards.
+    """
     result = db.execute(PROVIDERS).fetchall()
     return {"providers": [row[0] for row in result]}

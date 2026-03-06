@@ -14,6 +14,10 @@ def get_db(request: Request) -> DuckDBPyConnection:
 
 @router.get("/platforms")
 def platforms(db: DuckDBPyConnection = Depends(get_db)) -> dict:
+    """List all distinct platforms with both unique ID and display name.
+
+    Use this endpoint to discover valid platform identifiers for stats queries.
+    """
     result = db.execute(PLATFORMS).fetchall()
     return {
         "platforms": [

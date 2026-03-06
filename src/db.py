@@ -66,8 +66,7 @@ def connection_api() -> DuckDBPyConnection:
 
 
 def parquet_source_sql() -> str:
-    """SQL expression for the Parquet source (Hive-partitioned). Use in FROM clause."""
+    """SQL expression for the rollup Parquet source (Hive-partitioned by year). Use in FROM clause."""
     settings = get_settings()
     base = settings.storage_base_uri
-    # Local: path with forward slashes; GCS: gs://bucket/prefix
-    return f"read_parquet('{base}/**/*.parquet', hive_partitioning=true)"
+    return f"read_parquet('{base}/rollup/**/*.parquet', hive_partitioning=true)"

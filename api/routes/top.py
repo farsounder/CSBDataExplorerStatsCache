@@ -18,6 +18,10 @@ def top_platforms(
     days: int = Query(ge=1, le=3650),
     limit: int = Query(10, ge=1, le=1000),
 ) -> dict:
+    """Return top platforms by point volume over a trailing time window.
+
+    The `days` parameter defines the lookback period and `limit` caps returned rows.
+    """
     result = db.execute(TOP_PLATFORMS, [days, limit]).fetchall()
     return {
         "platforms": [
@@ -33,6 +37,10 @@ def top_providers(
     days: int = Query(ge=1, le=3650),
     limit: int = Query(10, ge=1, le=1000),
 ) -> dict:
+    """Return top providers by point volume over a trailing time window.
+
+    The `days` parameter defines the lookback period and `limit` caps returned rows.
+    """
     result = db.execute(TOP_PROVIDERS, [days, limit]).fetchall()
     return {
         "providers": [
