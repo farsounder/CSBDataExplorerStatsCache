@@ -32,6 +32,12 @@ variable "api_cache_mode" {
   default     = "materialize"
 }
 
+variable "api_max_instance_request_concurrency" {
+  description = "Max concurrent requests per API instance. Set to 1 for DuckDB single-connection safety."
+  type        = number
+  default     = 1
+}
+
 variable "incremental_schedule" {
   description = "Cron schedule for incremental ETL (default: daily at 02:00 UTC)"
   type        = string

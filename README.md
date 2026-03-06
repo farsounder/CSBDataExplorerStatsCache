@@ -68,7 +68,8 @@ Endpoints:
 |----------|-------------|
 | `GET /health` | Liveness |
 | `GET /providers` | Distinct providers |
-| `GET /platforms` | Distinct UNIQUE_ID, PLATFORM_NAME |
+| `GET /platforms` | Distinct UNIQUE_ID, PLATFORM_NAME, PROVIDER |
+| `GET /platforms/{id}` | Platform metadata by UNIQUE_ID |
 | `GET /top-platforms?days=30&limit=10` | Top platforms by point count |
 | `GET /top-providers?days=30&limit=10` | Top providers by point count |
 | `GET /stats/daily/platform/{id}?days=30` | Daily point counts for a platform (lookback window) |

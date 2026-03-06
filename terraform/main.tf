@@ -66,7 +66,7 @@ resource "google_cloud_run_v2_service" "api" {
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   template {
-    max_instance_request_concurrency = 10
+    max_instance_request_concurrency = var.api_max_instance_request_concurrency
 
     scaling {
       min_instance_count = 1

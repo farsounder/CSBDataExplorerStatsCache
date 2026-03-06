@@ -5,9 +5,26 @@ PROVIDERS = """
 SELECT DISTINCT provider FROM rollup ORDER BY 1
 """
 
-# Platforms: distinct unique_id, platform_name
+# Platforms: one row per unique_id with platform_name and provider
 PLATFORMS = """
-SELECT DISTINCT unique_id, platform_name FROM rollup ORDER BY unique_id
+SELECT
+    unique_id,
+    MIN(platform_name) AS platform_name,
+    MIN(provider) AS provider
+FROM rollup
+GROUP BY unique_id
+ORDER BY unique_id
+"""
+
+# Platform details by id (param: unique_id)
+PLATFORM_BY_ID = """
+SELECT
+    unique_id,
+    MIN(platform_name) AS platform_name,
+    MIN(provider) AS provider
+FROM rollup
+WHERE unique_id = ?
+GROUP BY unique_id
 """
 
 # Top platforms by point count in last N days (params: days, limit)
