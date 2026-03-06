@@ -66,6 +66,13 @@ resource "google_cloud_run_v2_service" "api" {
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   template {
+    max_instance_request_concurrency = 10
+
+    scaling {
+      min_instance_count = 1
+      max_instance_count = 5
+    }
+
     service_account = google_service_account.run.email
     containers {
       image = local.api_image
@@ -77,6 +84,10 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "GCS_PREFIX"
         value = "csb_analytics"
       }
+      env {
+        name  = "API_CACHE_MODE"
+        value = var.api_cache_mode
+      }
       resources {
         limits = {
           cpu    = "1"
@@ -87,17 +98,10 @@ resource "google_cloud_run_v2_service" "api" {
         http_get {
           path = "/health"
         }
-        initial_delay_seconds = 5
-        timeout_seconds        = 3
-        period_seconds         = 5
-        failure_threshold      = 2
-      }
-      liveness_probe {
-        http_get {
-          path = "/health"
-        }
         initial_delay_seconds = 10
-        period_seconds         = 10
+        timeout_seconds       = 10
+        period_seconds        = 15
+        failure_threshold     = 6
       }
     }
   }
@@ -119,7 +123,7 @@ resource "google_cloud_run_v2_job" "etl" {
 
   template {
     task_count = 1
-      template {
+    template {
       service_account = google_service_account.run.email
       containers {
         name  = "etl"
@@ -143,7 +147,7 @@ resource "google_cloud_run_v2_job" "etl" {
           }
         }
       }
-      timeout               = "7200s"
+      timeout = "7200s"
     }
   }
   depends_on = [google_project_service.run, google_storage_bucket_iam_member.run_data]

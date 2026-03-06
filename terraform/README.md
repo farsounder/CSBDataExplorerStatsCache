@@ -98,6 +98,7 @@ The build script tags each image with both `:latest` and a unique tag (git short
 ## Optional variables
 
 - **region** (default `us-central1`): Where Run, Scheduler, and the bucket live.
+- **api_cache_mode** (default `materialize`): `materialize` loads rollup once at startup into local DuckDB for faster requests; `remote` reads Parquet directly per query.
 - **incremental_schedule** (default `0 2 * * *`): Cron for daily incremental ETL (02:00 UTC).
 - **full_refresh_schedule** (default `0 3 * * 0`): Cron for weekly full refresh (Sunday 03:00 UTC). Set to `""` to disable.
 - **api_image** / **etl_image**: Leave empty on first apply to use a placeholder; set to your image URLs after push.

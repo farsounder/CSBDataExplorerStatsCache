@@ -45,6 +45,15 @@ class Settings(BaseSettings):
         description="First date (YYYY-MM-DD) for initial incremental run when no state exists",
     )
 
+    # API-only
+    API_CACHE_MODE: Literal["remote", "materialize"] = Field(
+        default="remote",
+        description=(
+            "remote = query Parquet directly each request; "
+            "materialize = load rollup into local DuckDB table at startup for faster requests"
+        ),
+    )
+
     @model_validator(mode="after")
     def require_storage(self) -> "Settings":
         if not self.LOCAL_STORAGE_PATH and not self.GCS_BUCKET:

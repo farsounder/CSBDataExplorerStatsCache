@@ -26,6 +26,12 @@ variable "etl_image" {
   default     = ""
 }
 
+variable "api_cache_mode" {
+  description = "API cache mode: remote (query Parquet directly) or materialize (load into DuckDB table at startup)"
+  type        = string
+  default     = "materialize"
+}
+
 variable "incremental_schedule" {
   description = "Cron schedule for incremental ETL (default: daily at 02:00 UTC)"
   type        = string
