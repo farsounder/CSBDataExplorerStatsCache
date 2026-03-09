@@ -15,14 +15,14 @@ def top_platforms(
     days: int = Query(ge=1, le=3650),
     limit: int = Query(10, ge=1, le=1000),
 ) -> dict:
-    """Return top platforms by point volume over a trailing time window.
+    """Return top platforms by unique ID over a trailing time window.
 
     The `days` parameter defines the lookback period and `limit` caps returned rows.
     """
     result = db.execute(TOP_PLATFORMS, [days, limit]).fetchall()
     return {
         "platforms": [
-            {"platform_name": row[0], "points": row[1]}
+            {"unique_id": row[0], "platform_name": row[1], "points": row[2]}
             for row in result
         ]
     }

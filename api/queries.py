@@ -29,11 +29,14 @@ GROUP BY unique_id
 
 # Top platforms by point count in last N days (params: days, limit)
 TOP_PLATFORMS = """
-SELECT platform_name AS platform_name, SUM(point_count) AS points
+SELECT
+    unique_id,
+    MIN(platform_name) AS platform_name,
+    SUM(point_count) AS points
 FROM rollup
 WHERE day >= current_date - (? * INTERVAL '1 day')
-GROUP BY platform_name
-ORDER BY points DESC
+GROUP BY unique_id
+ORDER BY points DESC, unique_id
 LIMIT ?
 """
 
