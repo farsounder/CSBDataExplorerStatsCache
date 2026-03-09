@@ -79,7 +79,7 @@ Endpoints:
 | `GET /stats/global` | Total points, files, unique platforms |
 | `GET /stats/discovery-rate` | New platforms per month |
 
-Env: `GCS_BUCKET`, `GCS_PREFIX`; optional `GCS_KEY`/`GCS_SECRET`, `API_CACHE_MODE=remote|materialize` (default `remote`; recommend `materialize` on Cloud Run for lower request latency). In GCP, default credentials are used when keys are not set.
+Env: `GCS_BUCKET`, `GCS_PREFIX`; optional `GCS_KEY`/`GCS_SECRET`, `API_CACHE_MODE=remote|materialize` (default `remote`), `API_REFRESH_INTERVAL_SECONDS` (default `86400`, used in materialize mode). In GCP, default credentials are used when keys are not set.
 
 ## Test locally (no GCP)
 

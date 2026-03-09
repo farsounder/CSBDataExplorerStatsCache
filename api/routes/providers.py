@@ -1,15 +1,12 @@
 """GET /providers — distinct providers."""
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from duckdb import DuckDBPyConnection
 
+from api.deps import get_db
 from api.queries import PROVIDERS
 
 router = APIRouter(tags=["providers"])
-
-
-def get_db(request: Request) -> DuckDBPyConnection:
-    return request.app.state.db
 
 
 @router.get("/providers")

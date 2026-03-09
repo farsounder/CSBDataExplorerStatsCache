@@ -1,8 +1,9 @@
 """Stats endpoints for daily trends, totals, and discovery rate."""
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from duckdb import DuckDBPyConnection
 
+from api.deps import get_db
 from api.queries import (
     STATS_DAILY_ALL_PLATFORMS,
     STATS_DAILY_ALL_PROVIDERS,
@@ -13,10 +14,6 @@ from api.queries import (
 )
 
 router = APIRouter(prefix="/stats", tags=["stats"])
-
-
-def get_db(request: Request) -> DuckDBPyConnection:
-    return request.app.state.db
 
 
 def _date_to_str(value: object) -> str:

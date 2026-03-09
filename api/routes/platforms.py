@@ -1,15 +1,12 @@
 """GET /platforms and /platforms/{id} platform metadata lookups."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from duckdb import DuckDBPyConnection
 
+from api.deps import get_db
 from api.queries import PLATFORM_BY_ID, PLATFORMS
 
 router = APIRouter(tags=["platforms"])
-
-
-def get_db(request: Request) -> DuckDBPyConnection:
-    return request.app.state.db
 
 
 @router.get("/platforms")

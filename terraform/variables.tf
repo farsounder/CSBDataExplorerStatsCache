@@ -38,6 +38,12 @@ variable "api_max_instance_request_concurrency" {
   default     = 1
 }
 
+variable "api_refresh_interval_seconds" {
+  description = "How often (seconds) a materialized API cache should refresh on active instances."
+  type        = number
+  default     = 86400
+}
+
 variable "incremental_schedule" {
   description = "Cron schedule for incremental ETL (default: daily at 02:00 UTC)"
   type        = string

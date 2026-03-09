@@ -88,6 +88,10 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "API_CACHE_MODE"
         value = var.api_cache_mode
       }
+      env {
+        name  = "API_REFRESH_INTERVAL_SECONDS"
+        value = tostring(var.api_refresh_interval_seconds)
+      }
       resources {
         limits = {
           cpu    = "1"

@@ -1,15 +1,12 @@
 """GET /top-platforms and /top-providers — by days and limit."""
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from duckdb import DuckDBPyConnection
 
+from api.deps import get_db
 from api.queries import TOP_PLATFORMS, TOP_PROVIDERS
 
 router = APIRouter(tags=["top"])
-
-
-def get_db(request: Request) -> DuckDBPyConnection:
-    return request.app.state.db
 
 
 @router.get("/top-platforms")

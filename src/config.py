@@ -53,6 +53,11 @@ class Settings(BaseSettings):
             "materialize = load rollup into local DuckDB table at startup for faster requests"
         ),
     )
+    API_REFRESH_INTERVAL_SECONDS: int = Field(
+        default=24 * 60 * 60,
+        ge=60,
+        description="How often (seconds) a materialized API cache should be refreshed.",
+    )
 
     @model_validator(mode="after")
     def require_storage(self) -> "Settings":
