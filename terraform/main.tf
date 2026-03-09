@@ -180,33 +180,8 @@ resource "google_cloud_scheduler_job" "etl_incremental" {
     headers = {
       "Content-Type" = "application/json"
     }
-    oidc_token {
+    oauth_token {
       service_account_email = google_service_account.run.email
-      audience              = "https://run.googleapis.com"
-    }
-  }
-  depends_on = [google_project_service.scheduler, google_cloud_run_v2_job_iam_member.scheduler_invoker]
-}
-
-# Cloud Scheduler: full refresh (weekly, optional)
-resource "google_cloud_scheduler_job" "etl_full_refresh" {
-  count       = var.full_refresh_schedule != "" ? 1 : 0
-  name        = "noaa-csb-etl-full-refresh"
-  description = "Run NOAA CSB ETL in full-refresh mode weekly"
-  schedule    = var.full_refresh_schedule
-  time_zone   = "UTC"
-  region      = var.region
-
-  http_target {
-    uri         = "https://run.googleapis.com/v2/projects/${var.project_id}/locations/${var.region}/jobs/${google_cloud_run_v2_job.etl.name}:run"
-    http_method = "POST"
-    body        = base64encode("{\"overrides\":{\"containerOverrides\":[{\"name\":\"etl\",\"env\":[{\"name\":\"SYNC_MODE\",\"value\":\"full\"}]}]}}")
-    headers = {
-      "Content-Type" = "application/json"
-    }
-    oidc_token {
-      service_account_email = google_service_account.run.email
-      audience              = "https://run.googleapis.com"
     }
   }
   depends_on = [google_project_service.scheduler, google_cloud_run_v2_job_iam_member.scheduler_invoker]
