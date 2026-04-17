@@ -29,7 +29,7 @@ Rollup schema:
 - `point_count`
 - `file_count`
 
-- **Incremental** (default): only partition dates after last run.
+- **Incremental** (default): re-process the last synced day and then continue through yesterday.
 - **Full refresh**: re-process all dates (catches late-arriving data).
 
 ```bash
@@ -47,7 +47,7 @@ Env: `GCS_BUCKET`, `GCS_PREFIX`; optional `SYNC_MODE=incremental|full`, `START_D
 
 ### ETL runtime behavior
 
-- **Start date precedence (incremental):** `last_sync_date` from state → `START_DATE` → earliest date discovered in NOAA bucket.
+- **Start date precedence (incremental):** `last_sync_date` from state (inclusive, to catch late-arriving files) → `START_DATE` → earliest date discovered in NOAA bucket.
 - **Checkpointing:** state is updated **after each successful month partition write**, using the max processed source date for that year/month.
 - **Resume safety:** if a run fails mid-way, previously written months are already checkpointed and do not need to be reprocessed.
 - **Bad timestamps:** rows with unparseable `TIME` are skipped from rollup and logged.

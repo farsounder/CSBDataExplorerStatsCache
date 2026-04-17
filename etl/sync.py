@@ -48,7 +48,7 @@ def _list_dates_incremental() -> list[date]:
     log.info("State: last_sync_date=%s", last.isoformat() if last else "none")
     settings = get_settings()
     if last is not None:
-        start = last + timedelta(days=1)
+        start = last
     elif settings.START_DATE:
         start = date.fromisoformat(settings.START_DATE)
         log.info("Using START_DATE: %s", start)
