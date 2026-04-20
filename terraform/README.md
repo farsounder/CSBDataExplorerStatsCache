@@ -101,7 +101,7 @@ The build script tags each image with both `:latest` and a unique tag (git short
 - **api_cache_mode** (default `materialize`): `materialize` loads rollup once at startup into local DuckDB for faster requests; `remote` reads Parquet directly per query.
 - **api_refresh_interval_seconds** (default `86400`): In `materialize` mode, cache refresh interval for active API instances.
 - **api_max_instance_request_concurrency** (default `1`): Max concurrent requests per API instance. Keep `1` when sharing one DuckDB connection in-process.
-- **incremental_schedule** (default `0 2 * * *`): Cron for daily incremental ETL (02:00 UTC).
+- **incremental_schedule** (default `0 2 * * `*): Cron for daily incremental ETL (02:00 UTC).
 - **full_refresh_schedule** (default `0 3 * * 0`): Cron for weekly full refresh (Sunday 03:00 UTC). Set to `""` to disable.
 - **api_image** / **etl_image**: Leave empty on first apply to use a placeholder; set to your image URLs after push.
 

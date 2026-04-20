@@ -26,3 +26,4 @@ dependencies = [
 ]
 [project.optional-dependencies]
 gcp = ["google-cloud-secret-manager", "google-cloud-storage"]
+test = ["pytest"]

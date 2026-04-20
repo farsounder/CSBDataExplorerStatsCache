@@ -18,7 +18,12 @@ from botocore.config import Config
 
 from src.config import get_settings
 
-from etl.state import get_last_sync_date, set_last_sync_date
+from etl.state import (
+    add_processed_keys,
+    get_last_sync_date,
+    get_processed_keys,
+    set_last_sync_date,
+)
 
 log = logging.getLogger(__name__)
 
@@ -133,8 +138,7 @@ def _date_batches() -> Iterator[tuple[date, list[str]]]:
         keys = _list_csv_keys_for_date(d)
         if not keys:
             continue
-        uris = [f"s3://{settings.S3_BUCKET}/{k}" for k in keys]
-        yield d, uris
+        yield d, keys
 
 
 def _split_s3_uri(uri: str) -> tuple[str, str]:
@@ -334,73 +338,130 @@ def _write_partition_counts(settings, year: int, month: int, counts: MonthCounts
         log.info("Wrote gs://%s", full)
 
 
-def _flush_pending_months(settings, pending: dict[MonthKey, MonthAccum]) -> None:
-    for (year, month), month_accum in sorted(pending.items()):
-        new_counts = _to_month_counts(month_accum)
-        existing = _read_partition_counts(settings, year, month)
-        # Overwrite semantics for overlapping keys, keep existing non-overlapping keys.
-        merged = dict(existing)
-        merged.update(new_counts)
+def _additive_merge(existing: MonthCounts, deltas: MonthCounts) -> MonthCounts:
+    """Add per-key deltas into existing month counts. Assumes new FILE_UUIDs are globally distinct."""
+    out = dict(existing)
+    for key, (delta_pts, delta_files) in deltas.items():
+        prev = out.get(key)
+        if prev is None:
+            out[key] = (delta_pts, delta_files)
+        else:
+            out[key] = (prev[0] + delta_pts, prev[1] + delta_files)
+    return out
+
+
+def _flush_pending(
+    settings,
+    pending_by_target_month: dict[MonthKey, MonthAccum],
+    pending_manifests: dict[date, list[str]],
+    current_state: date | None,
+    touched_months_in_run: set[MonthKey],
+    overwrite_first_touch: bool,
+) -> date | None:
+    """Write rollup deltas, then processed-file manifests, then advance state cursor."""
+    for (year, month), month_accum in sorted(pending_by_target_month.items()):
+        deltas = _to_month_counts(month_accum)
+        if overwrite_first_touch and (year, month) not in touched_months_in_run:
+            existing: MonthCounts = {}
+        else:
+            existing = _read_partition_counts(settings, year, month)
+        merged = _additive_merge(existing, deltas)
         _write_partition_counts(settings, year, month, merged)
+        touched_months_in_run.add((year, month))
+    pending_by_target_month.clear()
+
+    for d in sorted(pending_manifests.keys()):
+        keys = pending_manifests[d]
+        if keys:
+            add_processed_keys(d, keys)
+        if current_state is None or d > current_state:
+            set_last_sync_date(d)
+            current_state = d
+    pending_manifests.clear()
+    return current_state
 
 
 def run_sync() -> date | None:
     """
-    Run sync (incremental or full): list dates, aggregate rollup per source day,
-    write rollup parquet by month, update state checkpoint after each source-month flush.
-    Returns max source day processed, or None if no data was processed.
+    File-driven sync: list source dates, skip already-processed S3 keys, aggregate
+    rollup deltas per logical month, and additively merge them into existing rollup
+    partitions. Full refresh uses the same flow but treats the first touch of each
+    logical month within the run as overwrite, so it discards any stale prior state.
+    Returns the max source day processed, or None if no data was processed.
     """
     log.info("Starting processing: S3 read -> monthly rollup parquet")
     settings = get_settings()
+    overwrite_first_touch = settings.is_full_refresh
+
     max_date: date | None = None
-    day_count = 0
+    new_files_count = 0
+    days_with_new_files = 0
     pending_by_target_month: dict[MonthKey, MonthAccum] = {}
+    pending_manifests: dict[date, list[str]] = {}
+    touched_months_in_run: set[MonthKey] = set()
     current_source_period: MonthKey | None = None
     current_state = get_last_sync_date()
-    source_checkpoint_day: date | None = None
 
-    for d, uris in _date_batches():
+    for d, all_keys in _date_batches():
         src_period = (d.year, d.month)
-        if current_source_period is None:
-            current_source_period = src_period
-        elif src_period != current_source_period:
-            _flush_pending_months(settings, pending_by_target_month)
-            pending_by_target_month.clear()
-            if source_checkpoint_day is not None and (
-                current_state is None or source_checkpoint_day > current_state
-            ):
-                set_last_sync_date(source_checkpoint_day)
-                current_state = source_checkpoint_day
-                log.info(
-                    "Checkpointed state after source month %s-%02d: %s",
-                    current_source_period[0],
-                    current_source_period[1],
-                    source_checkpoint_day.isoformat(),
-                )
-            current_source_period = src_period
+        if current_source_period is not None and src_period != current_source_period:
+            current_state = _flush_pending(
+                settings,
+                pending_by_target_month,
+                pending_manifests,
+                current_state,
+                touched_months_in_run,
+                overwrite_first_touch,
+            )
+        current_source_period = src_period
 
+        if overwrite_first_touch:
+            new_keys = sorted(all_keys)
+        else:
+            new_keys = sorted(set(all_keys) - get_processed_keys(d))
+
+        if not new_keys:
+            log.info(
+                "Day %s: no new files (%d already processed)",
+                d.isoformat(),
+                len(all_keys),
+            )
+            pending_manifests.setdefault(d, [])
+            max_date = d
+            continue
+
+        log.info(
+            "Day %s: %d new file(s) of %d total",
+            d.isoformat(),
+            len(new_keys),
+            len(all_keys),
+        )
+        uris = [f"s3://{settings.S3_BUCKET}/{k}" for k in new_keys]
         day_delta = _process_day(d, uris)
         for month_key, month_accum in day_delta.items():
             if month_key not in pending_by_target_month:
                 pending_by_target_month[month_key] = {}
             _merge_counts_into_accum(pending_by_target_month[month_key], month_accum)
 
-        day_count += 1
+        existing_pending = pending_manifests.get(d, [])
+        pending_manifests[d] = existing_pending + new_keys
+        days_with_new_files += 1
+        new_files_count += len(new_keys)
         max_date = d
-        source_checkpoint_day = d
 
-    if day_count > 0:
-        _flush_pending_months(settings, pending_by_target_month)
-        if source_checkpoint_day is not None and (
-            current_state is None or source_checkpoint_day > current_state
-        ):
-            set_last_sync_date(source_checkpoint_day)
-            log.info(
-                "Checkpointed state after source month %s-%02d: %s",
-                source_checkpoint_day.year,
-                source_checkpoint_day.month,
-                source_checkpoint_day.isoformat(),
-            )
+    if pending_by_target_month or pending_manifests:
+        current_state = _flush_pending(
+            settings,
+            pending_by_target_month,
+            pending_manifests,
+            current_state,
+            touched_months_in_run,
+            overwrite_first_touch,
+        )
 
-    log.info("Processed %d day(s)", day_count)
+    log.info(
+        "Processed %d day(s) with %d new file(s) total",
+        days_with_new_files,
+        new_files_count,
+    )
     return max_date

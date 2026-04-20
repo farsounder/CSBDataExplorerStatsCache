@@ -18,6 +18,7 @@ ETL output:
 
 - `rollup/year=YYYY/month=MM/data.parquet`
 - `_state/last_sync.json`
+- `_state/processed_files/day=YYYY-MM-DD.json` (per-source-day registry of S3 keys already ingested)
 - `_state/failed_csvs/day=YYYY-MM-DD.json` (only when files are skipped)
 
 Rollup schema:
@@ -28,9 +29,8 @@ Rollup schema:
 - `day`
 - `point_count`
 - `file_count`
-
-- **Incremental** (default): re-process the last synced day and then continue through yesterday.
-- **Full refresh**: re-process all dates (catches late-arriving data).
+- **Incremental** (default): re-scan from the last synced source day through yesterday, but only ingest CSV keys not already listed in `_state/processed_files/`. Newly seen files are added into the existing rollup partitions.
+- **Full refresh**: re-process every source date. The first time the run touches a logical month it overwrites that partition; subsequent touches add to it. This rebuilds the rollup correctly even when source files contribute to multiple logical months.
 
 ```bash
 # Incremental (uses state on GCS)
@@ -48,11 +48,12 @@ Env: `GCS_BUCKET`, `GCS_PREFIX`; optional `SYNC_MODE=incremental|full`, `START_D
 ### ETL runtime behavior
 
 - **Start date precedence (incremental):** `last_sync_date` from state (inclusive, to catch late-arriving files) → `START_DATE` → earliest date discovered in NOAA bucket.
-- **Checkpointing:** state is updated **after each successful month partition write**, using the max processed source date for that year/month.
-- **Resume safety:** if a run fails mid-way, previously written months are already checkpointed and do not need to be reprocessed.
+- **File-driven incremental:** every CSV ingested is recorded in `_state/processed_files/day=YYYY-MM-DD.json`. Subsequent runs skip already-recorded keys, so a source day can be re-scanned safely without double counting.
+- **Logical-time correctness:** rows are aggregated by `TIME` day, not source-date day, so a CSV uploaded under a recent source date that contains data from an earlier logical day is added into the correct earlier rollup month partition.
+- **Checkpointing:** state advances after each source-month flush; rollup writes happen before manifest writes so the manifest never claims data that was not persisted.
 - **Bad timestamps:** rows with unparseable `TIME` are skipped from rollup and logged.
 - **Bad files:** unreadable/problematic CSV files are skipped and logged to `_state/failed_csvs/` so the run can continue.
-- **Incremental merge semantics:** for overlapping `(unique_id, platform_name, provider, day)` keys, the new run replaces prior values for those keys (idempotent re-run behavior).
+- **Incremental merge semantics:** new files are merged additively into existing rollup partitions for both `point_count` and `file_count`. This relies on NOAA assigning a previously unseen `FILE_UUID` to any newly added data; if that ever stops being true, run `--full-refresh` to rebuild.
 
 ## API
 
@@ -64,20 +65,22 @@ uv run uvicorn api.main:app --reload --port 8000
 
 Endpoints:
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /health` | Liveness |
-| `GET /providers` | Distinct providers |
-| `GET /platforms` | Distinct UNIQUE_ID, PLATFORM_NAME, PROVIDER |
-| `GET /platforms/{id}` | Platform metadata by UNIQUE_ID |
-| `GET /top-platforms?days=30&limit=10` | Top platforms by point count |
-| `GET /top-providers?days=30&limit=10` | Top providers by point count |
-| `GET /stats/daily/platform/{id}?days=30` | Daily point counts for a platform (lookback window) |
-| `GET /stats/daily/provider/{provider}?days=30` | Daily point counts for a provider (lookback window) |
-| `GET /stats/daily/all/providers?days=30` | Daily point counts split by provider (stacked chart friendly) |
-| `GET /stats/daily/all/platforms?days=30` | Daily point counts split by platform (stacked chart friendly) |
-| `GET /stats/global` | Total points, files, unique platforms |
-| `GET /stats/discovery-rate` | New platforms per month |
+
+| Endpoint                                       | Description                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------- |
+| `GET /health`                                  | Liveness                                                      |
+| `GET /providers`                               | Distinct providers                                            |
+| `GET /platforms`                               | Distinct UNIQUE_ID, PLATFORM_NAME, PROVIDER                   |
+| `GET /platforms/{id}`                          | Platform metadata by UNIQUE_ID                                |
+| `GET /top-platforms?days=30&limit=10`          | Top platforms by point count                                  |
+| `GET /top-providers?days=30&limit=10`          | Top providers by point count                                  |
+| `GET /stats/daily/platform/{id}?days=30`       | Daily point counts for a platform (lookback window)           |
+| `GET /stats/daily/provider/{provider}?days=30` | Daily point counts for a provider (lookback window)           |
+| `GET /stats/daily/all/providers?days=30`       | Daily point counts split by provider (stacked chart friendly) |
+| `GET /stats/daily/all/platforms?days=30`       | Daily point counts split by platform (stacked chart friendly) |
+| `GET /stats/global`                            | Total points, files, unique platforms                         |
+| `GET /stats/discovery-rate`                    | New platforms per month                                       |
+
 
 Env: `GCS_BUCKET`, `GCS_PREFIX`; optional `GCS_KEY`/`GCS_SECRET`, `API_CACHE_MODE=remote|materialize` (default `remote`), `API_REFRESH_INTERVAL_SECONDS` (default `86400`, used in materialize mode). In GCP, default credentials are used when keys are not set.
 
@@ -115,9 +118,9 @@ To run ETL with more data: `docker compose run --rm etl python -m etl.main --ful
 
 ### Recovery workflow after ETL failure
 
-1. Check ETL logs for the last successfully written year/month partition and checkpoint message.
-2. Confirm `_state/last_sync.json` advanced to that completed source date.
-3. Re-run incremental ETL; it resumes from the next date and rewrites only touched month partitions.
+1. Check ETL logs for the last successfully flushed source month and the corresponding `_state/last_sync.json` value.
+2. Re-run incremental ETL; it resumes from `last_sync_date` and the per-source-day processed-file manifests prevent re-ingesting already-recorded CSVs.
+3. If a partial flush left rollup and manifests inconsistent (e.g. process killed between rollup writes and manifest writes), run `--full-refresh` to rebuild from scratch.
 
 ## Docker (single image)
 
